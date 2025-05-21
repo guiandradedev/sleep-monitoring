@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Teste WebSocket Flask</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 2em;
+        }
+
+        #log {
+            border: 1px solid #ccc;
+            padding: 1em;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        input,
+        button {
+            margin-top: 1em;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Teste WebSocket com Flask</h1>
+    <div id="log"></div>
+
+    <input type="text" id="msgInput" placeholder="Digite uma mensagem">
+    <button onclick="sendMessage()">Enviar</button>
+
+    <script>
+        const log = document.getElementById('log');
+        const ws = new WebSocket("ws://localhost:5001/ws");
+        const max = 3500
+        const min = 3000
+
+        function createMessage(quantidade=3) {
+            const mensagem = {
+                data: []
+            }
+
+            const timestamp = Date.now()
+            for(let i=0; i<quantidade; i++) {
+                mensagem.data.push({
+                    sample: Math.floor(Math.random() * (max - min + 1)) + min,
+                    timestamp: timestamp+i
+                })
+            }
+
+            return mensagem
+        }
+
+        ws.onopen = () => {
+            logMessage("✅ Conectado ao servidor WebSocket");
+            ws.send(JSON.stringify(createMessage(3)))
+        };
+
+        ws.onmessage = (event) => {
+            const msg = JSON.parse(event.data)
+            logMessage("📩 Servidor: " + msg.mensagem);
+        };
+
+        ws.onerror = (error) => {
+            logMessage("❌ Erro: " + error.message);
+        };
+
+        ws.onclose = () => {
+            logMessage("🔌 Conexão encerrada");
+        };
+
+        function sendMessage() {
+            const input = document.getElementById('msgInput');
+            const message = input.value;
+
+            if (message) {
+                const payload = {
+                    nome: message,
+                    timestamp: new Date().toISOString()
+                };
+
+                ws.send(JSON.stringify(payload));
+                logMessage("📤 Você: " + message);
+                input.value = "";
+            }
+        }
+
+
+        function logMessage(msg) {
+            const p = document.createElement('p');
+            p.textContent = msg;
+            log.appendChild(p);
+            log.scrollTop = log.scrollHeight;
+        }
+    </script>
+
+</body>
+
+</html>
