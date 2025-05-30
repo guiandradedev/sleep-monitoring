@@ -40,7 +40,8 @@
 
         function createMessage(quantidade=3) {
             const mensagem = {
-                data: []
+                data: [],
+                type: Math.round(Math.random()) == 0 ? "microphone" : "luminosity"
             }
 
             const timestamp = Date.now()

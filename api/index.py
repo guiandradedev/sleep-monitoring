@@ -24,6 +24,7 @@ db_config = {
 
 @sock.route('/ws')
 def websocket(ws):
+    print("Conectou")
     while True:
         raw_data = ws.receive()
         if raw_data is None:
@@ -32,33 +33,49 @@ def websocket(ws):
         try:
             brute_data = json.loads(raw_data) # Dados sem formato
             data = brute_data.get("data", [])
+            sample_type = brute_data.get('type')
+            if not sample_type:
+                print("Amostra sem campo type: ", sample)
+                ws.send(json.dumps({"mensagem": f"Erro: Amostra sem campo type"}))
+                return
             try:
+                conn = None
+                cursor = None
                 conn = mysql.connector.connect(**db_config)
                 cursor = conn.cursor()
+                # print(data)
                 for sample in data:
-                    # timestamp = datetime.fromtimestamp(int(sample['timestamp']) / 1000).strftime('%Y-%m-%d %H:%M:%S')
-                    # cursor.execute("INSERT INTO microfone (sample, timestamp) VALUES (%s, %s)", (sample['sample'], timestamp))                    
-                    # conn.commit()
-                    timestamp = int(sample['timestamp']) // 1000  # Divide por 1000 para obter segundos
-                    # timestamp = sample['timestamp']
-                    cursor.execute("INSERT INTO microfone (sample, timestamp) VALUES (%s, %s)", (sample['sample'], timestamp))
+                    timestamp = int(sample['timestamp'])
+
+                    if sample_type != "dht":
+                        cursor.execute(
+                            "INSERT INTO data (sample, timestamp, type) VALUES (%s, %s, %s)",
+                            (sample.get('sample'), timestamp, sample_type)
+                        )
+                    else:
+                        cursor.execute(
+                            "INSERT INTO data (sample, timestamp, type) VALUES (%s, %s, %s)",
+                            (sample.get('temperature'), timestamp, "temperature")
+                        )
+                        cursor.execute(
+                            "INSERT INTO data (sample, timestamp, type) VALUES (%s, %s, %s)",
+                            (sample.get('humidity'), timestamp, "humidity")
+                        )
                     conn.commit()
+                # ...existing code...
                 ws.send(json.dumps({"mensagem": f"Cadastrado"}))
             except mysql.connector.Error as err:
                 ws.send(json.dumps({"mensagem": f"Erro: {str(err)}"}))
             finally:
-                cursor.close()
-                conn.close()
-
-
-            # # Exemplo: acessar um campo
-            # nome = data.get("nome", "desconhecido")
-            # print(f"Olá, {nome}!")
-
-            # # Enviar resposta como JSON
-            # ws.send(json.dumps({"mensagem": f"Olá, {nome}!"}))
+                if cursor is not None:
+                    cursor.close()
+                if conn is not None:
+                    conn.close()
         except json.JSONDecodeError:
             print("⚠️ Mensagem não é JSON válido:", raw_data)
+            ws.send("Erro: formato inválido")
+        except Exception as e:
+            print("Ocorreu um erro ao ler o arquivo:", e)
             ws.send("Erro: formato inválido")
 
 @sock.route('/teste')
@@ -71,12 +88,12 @@ def websocket2(ws):
         ws.send("ACK: " + data)
 
 
-@app.route('/mic', methods=['GET'])
-def get_dados():
+@app.route('/microphone', methods=['GET'])
+def get_mic():
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT sample, timestamp FROM microfone ORDER BY timestamp ASC")
+        cursor.execute("SELECT * FROM data WHERE type='microphone' ORDER BY timestamp ASC")
         dados = cursor.fetchall()
         return jsonify(dados)
     except mysql.connector.Error as err:
@@ -86,31 +103,48 @@ def get_dados():
         conn.close()
 
 
-@app.route('/teste2', methods=['GET'])
-def teste():
-    return jsonify({"teste": "dasdas"})
+@app.route('/luminosity', methods=['GET'])
+def get_lum():
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM data WHERE type='luminosity' ORDER BY timestamp ASC")
+        dados = cursor.fetchall()
+        return jsonify(dados)
+    except mysql.connector.Error as err:
+        return jsonify({'error': str(err)}), 500
+    finally:
+        cursor.close()
+        conn.close()
 
-# # Rota para criar um novo item
-# @app.route('/items', methods=['POST'])
-# def create_item():
-#     # data = request.json
-#     # nome = data.get('nome')
-#     # quantidade = data.get('quantidade')
 
-#     # if not nome or not quantidade:
-#     #     return jsonify({'error': 'Nome e quantidade são obrigatórios!'}), 400
+@app.route('/humidity', methods=['GET'])
+def get_hum():
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM data WHERE type='humidity' ORDER BY timestamp ASC")
+        dados = cursor.fetchall()
+        return jsonify(dados)
+    except mysql.connector.Error as err:
+        return jsonify({'error': str(err)}), 500
+    finally:
+        cursor.close()
+        conn.close()
 
-#     # try:
-#     #     conn = mysql.connector.connect(**db_config)
-#     #     cursor = conn.cursor()
-#     #     cursor.execute("INSERT INTO items (nome, quantidade) VALUES (%s, %s)", (nome, quantidade))
-#     #     conn.commit()
-#     #     return jsonify({'message': 'Item criado com sucesso!'}), 201
-#     # except mysql.connector.Error as err:
-#     #     return jsonify({'error': str(err)}), 500
-#     # finally:
-#     #     cursor.close()
-#     #     conn.close()
+@app.route('/temperature', methods=['GET'])
+def get_temp():
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM data WHERE type='temperature' ORDER BY timestamp ASC")
+        dados = cursor.fetchall()
+        return jsonify(dados)
+    except mysql.connector.Error as err:
+        return jsonify({'error': str(err)}), 500
+    finally:
+        cursor.close()
+        conn.close()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001, debug=True)
