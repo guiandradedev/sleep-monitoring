@@ -1,0 +1,15 @@
+menu "Wi-Fi Settings"
+
+config WIFI_SSID
+    string "Wi-Fi SSID"
+    default ""
+
+config WIFI_PASSWORD
+    string "Wi-Fi Password"
+    default ""
+
+config WEBSOCKET_URI
+    string "WebSocket URI"
+    default ""
+
+endmenu
