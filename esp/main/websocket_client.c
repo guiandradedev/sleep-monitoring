@@ -35,6 +35,7 @@ void websocket_app_start(void) {
     esp_websocket_client_start(client);
 }
 
+/*
 void websocket_send_readings(SensorReading *readings) {
     cJSON *root = cJSON_CreateObject();
     cJSON *data = cJSON_CreateArray();
@@ -72,13 +73,13 @@ void websocket_send_readings(SensorReading *readings) {
 
     cJSON_free(json);
     cJSON_Delete(root);
-}
+}*/
 
 void websocket_send_noise_readings(SensorPacket *packet) {
     if (xSemaphoreTake(ws_mutex, pdMS_TO_TICKS(5))) {
         if (esp_websocket_client_is_connected(client)) {
-            //ESP_LOGI(TAG, "Sending noise packet: timestamp=%lu, samples[0]=%d",
-            //       (unsigned long)packet->timestamp, packet->samples[0]);
+            ESP_LOGI(TAG, "Sending noise packet: timestamp=%lu, samples[0]=%d",
+                   (unsigned long)packet->timestamp, packet->samples[0]);
             esp_websocket_client_send_bin(client, (const char *)packet,
                                             sizeof(SensorPacket),
                                             portMAX_DELAY);

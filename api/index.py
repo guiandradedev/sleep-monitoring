@@ -5,6 +5,7 @@ import os
 from flask_sock import Sock
 import json
 from datetime import datetime
+import struct
 
 # Carrega as variáveis de ambiente do arquivo .env
 load_dotenv()
@@ -21,62 +22,61 @@ db_config = {
     'port': int(os.getenv('MYSQL_PORT', 3306))  # Adicione a porta
 }
 
+# Constantes para corresponder ao ESP32
+NOISE_SAMPLES_PER_PACKET = 448
+I2S_SAMPLE_RATE_HZ = 8000
+SAMPLE_DURATION_US = 1000000.0 / I2S_SAMPLE_RATE_HZ 
 
 @sock.route('/ws')
 def websocket(ws):
     print("Conectou")
     while True:
+        print("aaa")
         raw_data = ws.receive()
         if raw_data is None:
             break
 
         try:
-            brute_data = json.loads(raw_data) # Dados sem formato
-            data = brute_data.get("data", [])
-            sample_type = brute_data.get('type')
-            if not sample_type:
-                print("Amostra sem campo type: ", sample)
-                ws.send(json.dumps({"mensagem": f"Erro: Amostra sem campo type"}))
-                return
+            # Tamanho do pacote esperado (int64_t para timestamp + 500 x int16_t para samples)
+            expected_packet_size = 8 + (NOISE_SAMPLES_PER_PACKET * 2) # 1008 bytes
+            
+            if len(raw_data) != expected_packet_size:
+                print(f"⚠️ Pacote inesperado (tamanho {len(raw_data)} bytes)")
+                continue
+            print("tamanho certo")
+            # Desempacotar: 1 uint32 + 8 int16 => 'I8h'
+            timestamp, *samples = struct.unpack(f'<q{NOISE_SAMPLES_PER_PACKET}h', raw_data)
+            #print(f"Pacote recebido: timestamp={timestamp}, samples={samples}")
+
+            # Inserir no banco
             try:
-                conn = None
-                cursor = None
                 conn = mysql.connector.connect(**db_config)
                 cursor = conn.cursor()
-                # print(data)
-                for sample in data:
-                    timestamp = int(sample['timestamp'])
 
-                    if sample_type != "dht":
-                        cursor.execute(
-                            "INSERT INTO data (sample, timestamp, type) VALUES (%s, %s, %s)",
-                            (sample.get('sample'), timestamp, sample_type)
-                        )
-                    else:
-                        cursor.execute(
-                            "INSERT INTO data (sample, timestamp, type) VALUES (%s, %s, %s)",
-                            (sample.get('temperature'), timestamp, "temperature")
-                        )
-                        cursor.execute(
-                            "INSERT INTO data (sample, timestamp, type) VALUES (%s, %s, %s)",
-                            (sample.get('humidity'), timestamp, "humidity")
-                        )
-                    conn.commit()
-                # ...existing code...
-                ws.send(json.dumps({"mensagem": f"Cadastrado"}))
+                rows = [
+                    (
+                        int(timestamp - (NOISE_SAMPLES_PER_PACKET - 1 - i) * SAMPLE_DURATION_US), 
+                        int(sample), 
+                        "microphone"
+                    )
+                    for i, sample in enumerate(samples)
+                ]
+                
+                # Insere todos de uma vez
+                cursor.executemany("INSERT INTO data (timestamp, sample, type) VALUES (%s, %s, %s)", rows)
+
+                conn.commit()
+                #ws.send("Cadastrado")
             except mysql.connector.Error as err:
-                ws.send(json.dumps({"mensagem": f"Erro: {str(err)}"}))
+                print("❌ Erro ao inserir dados:", err)
+                #ws.send(f"Erro: {str(err)}")
             finally:
-                if cursor is not None:
-                    cursor.close()
-                if conn is not None:
-                    conn.close()
-        except json.JSONDecodeError:
-            print("⚠️ Mensagem não é JSON válido:", raw_data)
-            ws.send("Erro: formato inválido")
+                cursor.close()
+                conn.close()
+
         except Exception as e:
-            print("Ocorreu um erro ao ler o arquivo:", e)
-            ws.send("Erro: formato inválido")
+            print("❌ Erro ao interpretar pacote binário:", e)
+            ws.send("Erro: pacote inválido")
 
 @sock.route('/teste')
 def websocket2(ws):
