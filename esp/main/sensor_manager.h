@@ -11,8 +11,8 @@
 #include "driver/gpio.h"
 
 // Antigo
-// #define LDR_SENSOR_PIN ADC_CHANNEL_4
-// #define DHT_SENSOR_PIN GPIO_NUM_33
+#define LDR_SENSOR_PIN ADC_CHANNEL_4 // GPIO 32
+#define DHT_SENSOR_PIN GPIO_NUM_33
 
 // --- Novas definições para o I2S ---
 #define I2S_MIC_WS_GPIO      GPIO_NUM_25 // Exemplo: Pin WS (LRCK) do microfone
@@ -32,27 +32,33 @@
 // Então, para ler N amostras, o buffer precisa ser N * 2 bytes.
 #define I2S_READ_BUFFER_SIZE (I2S_DMA_BUFFER_LEN * 2) // O buffer de leitura precisa ter o tamanho de um buffer DMA
 
-// Definição de SensorReading (manter, mas não será usada para áudio I2S)
-typedef struct {
-    char name[20];
-    int value;
-    int64_t timestamp;
-} SensorReading;
-
 // SensorPacket ajustado para conter os dados I2S
 #define NOISE_SAMPLES_PER_PACKET 448 // Número de amostras por pacote (para 8kHz, 500 amostras = 62.5ms)
 
 typedef struct {
     int64_t timestamp;
     int16_t samples[NOISE_SAMPLES_PER_PACKET]; // Amostras de áudio de 16 bits
-} SensorPacket;
+} __attribute__((packed)) SensorPacket;
 
+typedef struct {
+    int64_t timestamp;
+    int32_t samples[NOISE_SAMPLES_PER_PACKET]; // Amostras de áudio de 32 bits
+} RawSensorPacket;
+
+typedef struct {
+    int64_t timestamp; // Timestamp da leitura
+    int16_t value;    // Valor lido do sensor
+} __attribute__((packed)) LdrSensorReading;
+
+typedef struct {
+    int64_t timestamp; // Timestamp da leitura
+    int16_t temperature_value;    // Valor lido do sensor
+    int16_t humidity_value;       // Valor lido do sensor
+} __attribute__((packed)) DhtSensorReading;
 
 void sensor_manager_init(void);
 
-// Nova função para ler uma quantidade de amostras I2S.
-size_t i2s_read_samples(int16_t *buffer, size_t num_samples_to_read);
+size_t i2s_read_samples(int32_t *buffer, size_t num_samples_to_read);
 
-// Funções para outros sensores (manter por compatibilidade se necessário em outro lugar)
-// void read_ldr(SensorReading *buffer);
-// void read_dht(SensorReading *buffer);
+void read_ldr(LdrSensorReading *buffer);
+void read_dht(DhtSensorReading *buffer);

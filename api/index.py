@@ -25,33 +25,25 @@ db_config = {
 # Constantes para corresponder ao ESP32
 NOISE_SAMPLES_PER_PACKET = 448
 I2S_SAMPLE_RATE_HZ = 8000
-SAMPLE_DURATION_US = 1000000.0 / I2S_SAMPLE_RATE_HZ 
+SAMPLE_DURATION_US = 1000000.0 / I2S_SAMPLE_RATE_HZ
+
 
 @sock.route('/ws')
 def websocket(ws):
-    print("Conectou")
     while True:
-        print("aaa")
         raw_data = ws.receive()
         if raw_data is None:
             break
 
         try:
-            # Tamanho do pacote esperado (int64_t para timestamp + 500 x int16_t para samples)
-            expected_packet_size = 8 + (NOISE_SAMPLES_PER_PACKET * 2) # 1008 bytes
+            # Tamanho do pacote esperado (int64_t para timestamp + 448 x int16_t para samples)
+            expected_mic_packet_size = 8 + (NOISE_SAMPLES_PER_PACKET * 2) # 904 bytes
+            expected_ldr_packet_size = 8 + 2 # 10 bytes
+            expected_dht_packet_size = 8 + 2 * 2 # 12 bytes
             
-            if len(raw_data) != expected_packet_size:
-                print(f"⚠️ Pacote inesperado (tamanho {len(raw_data)} bytes)")
-                continue
-            print("tamanho certo")
-            # Desempacotar: 1 uint32 + 8 int16 => 'I8h'
-            timestamp, *samples = struct.unpack(f'<q{NOISE_SAMPLES_PER_PACKET}h', raw_data)
-            #print(f"Pacote recebido: timestamp={timestamp}, samples={samples}")
-
-            # Inserir no banco
-            try:
-                conn = mysql.connector.connect(**db_config)
-                cursor = conn.cursor()
+            if len(raw_data) == expected_mic_packet_size:
+                print("pacote mic recebido")
+                timestamp, *samples = struct.unpack(f'<q{NOISE_SAMPLES_PER_PACKET}h', raw_data)
 
                 rows = [
                     (
@@ -61,7 +53,26 @@ def websocket(ws):
                     )
                     for i, sample in enumerate(samples)
                 ]
-                
+            elif len(raw_data) == expected_ldr_packet_size:
+                print("pacote ldr recebido")
+                timestamp, sample = struct.unpack('<qh', raw_data)
+                rows = [(int(timestamp), int(sample), "luminosity")]
+            elif len(raw_data) == expected_dht_packet_size:
+                print("pacote dht recebido")
+                timestamp, temp, hum = struct.unpack('<q2h', raw_data)
+                rows = [
+                    (int(timestamp), int(temp), "temperature"),
+                    (int(timestamp), int(hum), "humidity")
+                ]
+            else:
+                print(f"⚠️ Pacote inesperado (tamanho {len(raw_data)} bytes)")
+                continue
+            
+            # Inserir no banco
+            try:
+                conn = mysql.connector.connect(**db_config)
+                cursor = conn.cursor()
+
                 # Insere todos de uma vez
                 cursor.executemany("INSERT INTO data (timestamp, sample, type) VALUES (%s, %s, %s)", rows)
 
@@ -76,7 +87,7 @@ def websocket(ws):
 
         except Exception as e:
             print("❌ Erro ao interpretar pacote binário:", e)
-            ws.send("Erro: pacote inválido")
+            #ws.send("Erro: pacote inválido")
 
 @sock.route('/teste')
 def websocket2(ws):

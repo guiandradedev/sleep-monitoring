@@ -1,6 +1,5 @@
 #include "websocket_client.h"
 
-#include "cJSON.h"
 #include "esp_log.h"
 #include "esp_websocket_client.h"
 #include "freertos/FreeRTOS.h"
@@ -35,50 +34,41 @@ void websocket_app_start(void) {
     esp_websocket_client_start(client);
 }
 
-/*
-void websocket_send_readings(SensorReading *readings) {
-    cJSON *root = cJSON_CreateObject();
-    cJSON *data = cJSON_CreateArray();
 
-    if (strcmp(readings[0].name, "temperature") == 0 ||
-        strcmp(readings[0].name, "humidity") == 0) {
-        cJSON *entry = cJSON_CreateObject();
-        cJSON_AddNumberToObject(entry, "temperature", readings[0].value);
-        cJSON_AddNumberToObject(entry, "humidity", readings[1].value);
-        cJSON_AddNumberToObject(entry, "timestamp", readings[0].timestamp);
-        cJSON_AddItemToArray(data, entry);
-
-        cJSON_AddItemToObject(root, "data", data);
-        cJSON_AddStringToObject(root, "type", "dht");
-    } else {
-        cJSON *entry = cJSON_CreateObject();
-        cJSON_AddNumberToObject(entry, "sample", readings->value);
-        cJSON_AddNumberToObject(entry, "timestamp", readings->timestamp);
-        cJSON_AddItemToArray(data, entry);
-
-        cJSON_AddItemToObject(root, "data", data);
-        cJSON_AddStringToObject(root, "type", readings->name);
-    }
-
-    char *json = cJSON_PrintUnformatted(root);
-
-    if (xSemaphoreTake(ws_mutex, pdMS_TO_TICKS(100))) {
+void websocket_send_ldr_readings(LdrSensorReading *reading) {
+    if (xSemaphoreTake(ws_mutex, pdMS_TO_TICKS(5))) {
         if (esp_websocket_client_is_connected(client)) {
-            ESP_LOGI(TAG, "Sending data: %s", json);
-            esp_websocket_client_send_text(client, json, strlen(json),
-                                           portMAX_DELAY);
+            ESP_LOGI(TAG, "Sending ldr reading: value=%d, timestamp=%lu",
+                        reading->value,
+                        (unsigned long)reading->timestamp);
+            esp_websocket_client_send_bin(client, (const char *)reading,
+                                        sizeof(LdrSensorReading),
+                                        portMAX_DELAY);
         }
         xSemaphoreGive(ws_mutex);
     }
+}
 
-    cJSON_free(json);
-    cJSON_Delete(root);
-}*/
 
-void websocket_send_noise_readings(SensorPacket *packet) {
+void websocket_send_dht_readings(DhtSensorReading *reading) {
     if (xSemaphoreTake(ws_mutex, pdMS_TO_TICKS(5))) {
         if (esp_websocket_client_is_connected(client)) {
-            ESP_LOGI(TAG, "Sending noise packet: timestamp=%lu, samples[0]=%d",
+            ESP_LOGI(TAG, "Sending DHT reading: temp=%d, hum=%d, timestamp=%lu",
+                        reading->temperature_value, reading->humidity_value,
+                        (unsigned long)reading->timestamp);
+            esp_websocket_client_send_bin(client, (const char *)reading,
+                                        sizeof(DhtSensorReading),
+                                        portMAX_DELAY);
+        }
+        xSemaphoreGive(ws_mutex);
+    }
+}
+
+
+void websocket_send_mic_readings(SensorPacket *packet) {
+    if (xSemaphoreTake(ws_mutex, pdMS_TO_TICKS(5))) {
+        if (esp_websocket_client_is_connected(client)) {
+            ESP_LOGI(TAG, "Sending mic packet: timestamp=%lu, samples[0]=%d",
                    (unsigned long)packet->timestamp, packet->samples[0]);
             esp_websocket_client_send_bin(client, (const char *)packet,
                                             sizeof(SensorPacket),
