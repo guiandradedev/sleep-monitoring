@@ -1,4 +1,5 @@
 #include "sensor_manager.h"
+#include "config_server.h" // Para set_sample_rate
 
 #include <sys/time.h> // Para gettimeofday
 #include <string.h>   // Para memset
@@ -20,17 +21,18 @@ static const char *TAG = "I2S_Manager";
 static i2s_chan_handle_t rx_handle = NULL;
 static adc_oneshot_unit_handle_t adc_handle;
 
+uint32_t i2s_sample_rate = 8000; // Taxa de amostragem padrão (8 kHz)
 
 void sensor_manager_init(void) {
     // --- Inicialização do Driver I2S ---
     // A API nova usa i2s_std_config_t para configuração padrão
     i2s_std_config_t i2s_config = {
         .clk_cfg = {
-            .sample_rate_hz = I2S_SAMPLE_RATE,
+            .sample_rate_hz = i2s_sample_rate,
             .clk_src = I2S_CLK_SRC_DEFAULT, // Ou I2S_CLK_APLL, I2S_CLK_DEFAULT
                                           // I2S_CLK_DEDICATED é comum para I2S de áudio
             .mclk_multiple = I2S_MCLK_MULTIPLE_384, // Use 384x para 24 bits
-        },        .slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_24BIT, I2S_SLOT_MODE_MONO), // CORRIGIDO: MSB_SLOT_DEFAULT_CONFIG e enums corretos
+        },        .slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_24BIT, I2S_SLOT_MODE_MONO),
         .gpio_cfg = {
             .mclk = I2S_GPIO_UNUSED, // Não usamos MCLK neste exemplo (continua funcionando)
             .bclk = I2S_MIC_BCLK_GPIO,
@@ -88,6 +90,52 @@ size_t i2s_read_samples(int32_t *buffer, size_t num_samples_to_read) {
         ESP_LOGE(TAG, "Erro ao ler dados I2S: %d", err);
         return 0;
     }
+}
+
+
+void set_sample_rate(uint32_t new_rate) {
+    if (new_rate < 1000 || new_rate > 48000) {
+        ESP_LOGE(TAG, "Taxa de amostragem inválida: %d. Deve ser entre 1000 e 48000 Hz.", (int)new_rate);
+        return;
+    }
+
+    i2s_sample_rate = new_rate;
+
+    // 1. Para e apaga canal existente
+    ESP_ERROR_CHECK(i2s_channel_disable(rx_handle));
+    ESP_ERROR_CHECK(i2s_del_channel(rx_handle));
+
+    // 2. Recria o canal com a nova taxa
+    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
+    ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, &rx_handle, NULL));
+
+    i2s_std_config_t std_cfg = {
+        .clk_cfg = {
+            .sample_rate_hz = i2s_sample_rate,
+            .clk_src = I2S_CLK_SRC_DEFAULT,
+            .mclk_multiple = I2S_MCLK_MULTIPLE_384,
+        },
+        .slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_24BIT, I2S_SLOT_MODE_MONO),
+        .gpio_cfg = {
+            .mclk = I2S_GPIO_UNUSED,
+            .bclk = I2S_MIC_BCLK_GPIO,
+            .ws   = I2S_MIC_WS_GPIO,
+            .dout = GPIO_NUM_NC,
+            .din  = I2S_MIC_DATA_GPIO,
+            .invert_flags = {
+                .mclk_inv = false,
+                .bclk_inv = false,
+                .ws_inv   = false,
+            },
+        },
+    };
+
+    ESP_ERROR_CHECK(i2s_channel_init_std_mode(rx_handle, &std_cfg));
+    ESP_ERROR_CHECK(i2s_channel_enable(rx_handle));
+
+
+    ESP_LOGI(TAG, "Taxa de amostragem atualizada para %d Hz.", (int)i2s_sample_rate);
+
 }
 
 

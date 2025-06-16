@@ -18,7 +18,10 @@
 #define I2S_MIC_WS_GPIO      GPIO_NUM_25 // Exemplo: Pin WS (LRCK) do microfone
 #define I2S_MIC_BCLK_GPIO    GPIO_NUM_26 // Exemplo: Pin BCLK do microfone
 #define I2S_MIC_DATA_GPIO    GPIO_NUM_27 // Exemplo: Pin SD (DATA) do microfone
-#define I2S_SAMPLE_RATE      8000        // Taxa de amostragem desejada (8 kHz)
+//#define I2S_SAMPLE_RATE      8000        // Taxa de amostragem desejada (8 kHz)
+
+extern uint32_t i2s_sample_rate;
+
 // A macro I2S_BITS_PER_SAMPLE agora define o tipo da API antiga,
 // mas vamos usar o valor direto na config da nova API.
 // #define I2S_BITS_PER_SAMPLE  I2S_BITS_PER_SAMPLE_16BIT // REMOVER ou não usar diretamente
