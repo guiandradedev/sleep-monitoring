@@ -19,7 +19,7 @@ DB_CONFIG = {
 }
 
 # --- Parâmetros do WAV ---
-TARGET_SAMPLE_RATE = 11025  # Hz desejado para o WAV final (corresponde ao ESP32)
+TARGET_SAMPLE_RATE = 18000  # Hz desejado para o WAV final (corresponde ao ESP32)
 SAMPLE_WIDTH = 2           # 2 bytes para 16 bits
 NUM_CHANNELS = 1           # Monocanal
 

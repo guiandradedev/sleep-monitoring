@@ -77,7 +77,7 @@ void i2s_audio_capture_task(void *pvParameters) {
         }
         // Não é necessário um delay fixo aqui, i2s_read já é bloqueante e controla o fluxo.
         // Um pequeno delay pode ser útil para outras tarefas, mas cuidado para não perder amostras
-        // vTaskDelay(pdMS_TO_TICKS(1));
+        taskYIELD();
 
         // Cuidado!!! Não precisa de delay apenas porque a impressão do estado do sistema bloqueia a task.
     }
@@ -100,7 +100,7 @@ void i2s_send_task(void *pvParameters) {
             packet.timestamp = raw_packet.timestamp; // Mantém o timestamp original
 
             websocket_send_mic_readings(&packet);
-            //ESP_LOGI(TAG, "Tamanho da fila: %d", uxQueueMessagesWaiting(noise_queue));
+            ESP_LOGI(TAG, "Tamanho da fila: %d", uxQueueMessagesWaiting(noise_queue));
         }
     }
 }
