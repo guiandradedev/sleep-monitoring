@@ -52,7 +52,7 @@ static esp_err_t set_rate_post_handler(httpd_req_t *req) {
     }
 
     ESP_LOGI(TAG, "Nova taxa de amostragem: %d", new_rate);
-    set_sample_rate((uint32_t)new_rate);
+    //set_sample_rate((uint32_t)new_rate);
 
     httpd_resp_sendstr(req, "Taxa atualizada com sucesso.");
     return ESP_OK;

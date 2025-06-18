@@ -1,5 +1,6 @@
 #include "websocket_client.h"
 
+#include "esp_timer.h"
 #include "esp_log.h"
 #include "esp_websocket_client.h"
 #include "freertos/FreeRTOS.h"
@@ -66,13 +67,16 @@ void websocket_send_dht_readings(DhtSensorReading *reading) {
 
 
 void websocket_send_mic_readings(SensorPacket *packet) {
+    uint64_t now = esp_timer_get_time();
     if (xSemaphoreTake(ws_mutex, pdMS_TO_TICKS(5))) {
+        uint64_t mutex = esp_timer_get_time();
         if (esp_websocket_client_is_connected(client)) {
-            ESP_LOGI(TAG, "Sending mic packet: timestamp=%lu, samples[0]=%d",
-                   (unsigned long)packet->timestamp, packet->samples[0]);
             esp_websocket_client_send_bin(client, (const char *)packet,
-                                            sizeof(SensorPacket),
-                                            portMAX_DELAY);
+            sizeof(SensorPacket),
+            portMAX_DELAY);
+            uint64_t elapsed = esp_timer_get_time();
+            ESP_LOGI(TAG, "Sending mic packet: timestamp=%lu, samples[0]=%d ||||||| Mutex took %llu us, send took %llu us",
+                (unsigned long)packet->timestamp, packet->samples[0], (mutex - now), (elapsed - mutex));
         }
         xSemaphoreGive(ws_mutex);
     }

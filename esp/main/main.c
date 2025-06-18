@@ -13,7 +13,7 @@
 #include "wifi_manager.h"
 #include "config_server.h"
 
-#define NOISE_QUEUE_LENGTH 30
+#define NOISE_QUEUE_LENGTH 50
 
 static const char *TAG = "main";
 
@@ -34,7 +34,6 @@ void init_time_sync() {
         localtime_r(&now, &timeinfo);
     }
 }
-
 
 static QueueHandle_t noise_queue;
 
@@ -101,6 +100,7 @@ void i2s_send_task(void *pvParameters) {
             packet.timestamp = raw_packet.timestamp; // Mantém o timestamp original
 
             websocket_send_mic_readings(&packet);
+            //ESP_LOGI(TAG, "Tamanho da fila: %d", uxQueueMessagesWaiting(noise_queue));
         }
     }
 }
@@ -188,9 +188,9 @@ void app_main(void) {
     }
 
     // Cria tasks
-    xTaskCreatePinnedToCore(i2s_audio_capture_task, "I2S Audio Capture", 4096, NULL, 10, NULL, 0);
-    xTaskCreatePinnedToCore(i2s_send_task, "Send Task", 8192, NULL, 8, NULL, 1);
-    xTaskCreatePinnedToCore(ldr_task, "LDR Task", 4096, NULL, 9, NULL, 0);
-    xTaskCreatePinnedToCore(dht_task, "DHT Task", 4096, NULL, 9, NULL, 0);
+    xTaskCreatePinnedToCore(i2s_audio_capture_task, "I2S Audio Capture", 4096, NULL, 9, NULL, 0);
+    xTaskCreatePinnedToCore(i2s_send_task, "Send Task", 8192, NULL, 10, NULL, 1);
+    xTaskCreatePinnedToCore(ldr_task, "LDR Task", 4096, NULL, 8, NULL, 0);
+    xTaskCreatePinnedToCore(dht_task, "DHT Task", 4096, NULL, 8, NULL, 0);
     xTaskCreatePinnedToCore(monitor_task, "Monitor Task", 4096, NULL, 5, NULL, 0);
 }

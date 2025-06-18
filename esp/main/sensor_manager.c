@@ -4,6 +4,7 @@
 #include <sys/time.h> // Para gettimeofday
 #include <string.h>   // Para memset
 #include <stdlib.h>   // Para malloc, free
+#include <math.h>    // Para pow
 
 #include "esp_log.h" // Para logs do ESP-IDF
 #include "freertos/FreeRTOS.h" // Para portMAX_DELAY
@@ -21,14 +22,12 @@ static const char *TAG = "I2S_Manager";
 static i2s_chan_handle_t rx_handle = NULL;
 static adc_oneshot_unit_handle_t adc_handle;
 
-uint32_t i2s_sample_rate = 8000; // Taxa de amostragem padrão (8 kHz)
-
 void sensor_manager_init(void) {
     // --- Inicialização do Driver I2S ---
     // A API nova usa i2s_std_config_t para configuração padrão
     i2s_std_config_t i2s_config = {
         .clk_cfg = {
-            .sample_rate_hz = i2s_sample_rate,
+            .sample_rate_hz = I2S_SAMPLE_RATE,
             .clk_src = I2S_CLK_SRC_DEFAULT, // Ou I2S_CLK_APLL, I2S_CLK_DEFAULT
                                           // I2S_CLK_DEDICATED é comum para I2S de áudio
             .mclk_multiple = I2S_MCLK_MULTIPLE_384, // Use 384x para 24 bits
@@ -93,52 +92,6 @@ size_t i2s_read_samples(int32_t *buffer, size_t num_samples_to_read) {
 }
 
 
-void set_sample_rate(uint32_t new_rate) {
-    if (new_rate < 1000 || new_rate > 48000) {
-        ESP_LOGE(TAG, "Taxa de amostragem inválida: %d. Deve ser entre 1000 e 48000 Hz.", (int)new_rate);
-        return;
-    }
-
-    i2s_sample_rate = new_rate;
-
-    // 1. Para e apaga canal existente
-    ESP_ERROR_CHECK(i2s_channel_disable(rx_handle));
-    ESP_ERROR_CHECK(i2s_del_channel(rx_handle));
-
-    // 2. Recria o canal com a nova taxa
-    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
-    ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, &rx_handle, NULL));
-
-    i2s_std_config_t std_cfg = {
-        .clk_cfg = {
-            .sample_rate_hz = i2s_sample_rate,
-            .clk_src = I2S_CLK_SRC_DEFAULT,
-            .mclk_multiple = I2S_MCLK_MULTIPLE_384,
-        },
-        .slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_24BIT, I2S_SLOT_MODE_MONO),
-        .gpio_cfg = {
-            .mclk = I2S_GPIO_UNUSED,
-            .bclk = I2S_MIC_BCLK_GPIO,
-            .ws   = I2S_MIC_WS_GPIO,
-            .dout = GPIO_NUM_NC,
-            .din  = I2S_MIC_DATA_GPIO,
-            .invert_flags = {
-                .mclk_inv = false,
-                .bclk_inv = false,
-                .ws_inv   = false,
-            },
-        },
-    };
-
-    ESP_ERROR_CHECK(i2s_channel_init_std_mode(rx_handle, &std_cfg));
-    ESP_ERROR_CHECK(i2s_channel_enable(rx_handle));
-
-
-    ESP_LOGI(TAG, "Taxa de amostragem atualizada para %d Hz.", (int)i2s_sample_rate);
-
-}
-
-
 void read_ldr(LdrSensorReading *buffer) {
     struct timeval tv;
     gettimeofday(&tv, NULL);
@@ -146,8 +99,14 @@ void read_ldr(LdrSensorReading *buffer) {
 
     int ldr_raw = 0;
     adc_oneshot_read(adc_handle, LDR_SENSOR_PIN, &ldr_raw);
-    buffer->value = (int16_t)ldr_raw; // Lê o valor do ADC e converte para int16_t
+    
+    // Converte o valor lido para iluminância [lx]
+    int16_t illuminance = 3802963734086 * pow((10000.0 * ((3.3 * 4095.0)/(2.45 * ldr_raw) - 1)), -2.6491986522);
+    
+    buffer->value = illuminance; // Lê o valor do ADC e converte para int16_t
     buffer->timestamp = timestamp; // Adiciona o timestamp da leitura
+    //ESP_LOGI(TAG, "LDR raw value: %d, converted illuminance: %d", ldr_raw, illuminance);
+    //ESP_LOGI(TAG, "LDR reading: value=%d, timestamp=%lld", buffer->value, (long long)buffer->timestamp);
 }
 
 
