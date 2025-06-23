@@ -5,3 +5,4 @@ flask-sock
 
 matplotlib
 requests
+Flask-CORS
