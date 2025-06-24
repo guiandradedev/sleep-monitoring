@@ -99,17 +99,14 @@ void read_ldr(LdrSensorReading *buffer) {
 
     int ldr_raw = 0;
     adc_oneshot_read(adc_handle, LDR_SENSOR_PIN, &ldr_raw);
-
-    if (ldr_raw <= 0) ldr_raw = 1;
-    double ratio = (3.3 * 4095.0)/(2.45 * ldr_raw) - 1;
-    if (ratio <= 0) ratio = 0.0001;
-
-    double illuminance = 1000.0 * 3802963734086 * pow(ratio, -2.6491986522);
-    if (illuminance > 32767) illuminance = 32767;
-    if (illuminance < 0) illuminance = 0;
-
-    buffer->value = (int16_t)illuminance;
-    buffer->timestamp = timestamp;
+    
+    // Converte o valor lido para iluminância [lx]
+    int32_t illuminance = 1000.0 * 3804981537914.92 * pow((10000.0 * ((3.3 * 4095.0)/(2.45 * (ldr_raw + 1)) - 1)), -2.6495028925);
+    
+    buffer->value = illuminance; // Lê o valor do ADC e converte para int16_t
+    buffer->timestamp = timestamp; // Adiciona o timestamp da leitura
+    //ESP_LOGI(TAG, "LDR raw value: %d, converted illuminance: %d", ldr_raw, illuminance);
+    //ESP_LOGI(TAG, "LDR reading: value=%d, timestamp=%lld", buffer->value, (long long)buffer->timestamp);
 }
 
 

@@ -38,7 +38,7 @@ def websocket(ws):
         try:
             # Tamanho do pacote esperado (int64_t para timestamp + 448 x int16_t para samples)
             expected_mic_packet_size = 8 + (NOISE_SAMPLES_PER_PACKET * 2) # 904 bytes
-            expected_ldr_packet_size = 8 + 2 # 10 bytes
+            expected_ldr_packet_size = 8 + 4 # 12 bytes
             expected_dht_packet_size = 8 + 2 * 2 # 12 bytes
             
             if len(raw_data) == expected_mic_packet_size:
@@ -55,7 +55,7 @@ def websocket(ws):
                 ]
             elif len(raw_data) == expected_ldr_packet_size:
                 print("pacote ldr recebido")
-                timestamp, sample = struct.unpack('<qh', raw_data)
+                timestamp, sample = struct.unpack('<qi', raw_data)
                 rows = [(int(timestamp), int(sample), "luminosity")]
             elif len(raw_data) == expected_dht_packet_size:
                 print("pacote dht recebido")

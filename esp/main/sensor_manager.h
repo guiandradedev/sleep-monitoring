@@ -48,7 +48,7 @@ typedef struct {
 
 typedef struct {
     int64_t timestamp; // Timestamp da leitura
-    int16_t value;    // Valor lido do sensor
+    int32_t value;    // Valor lido do sensor
 } __attribute__((packed)) LdrSensorReading;
 
 typedef struct {

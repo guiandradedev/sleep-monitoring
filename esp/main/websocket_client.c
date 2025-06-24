@@ -39,7 +39,7 @@ void websocket_app_start(void) {
 void websocket_send_ldr_readings(LdrSensorReading *reading) {
     if (xSemaphoreTake(ws_mutex, pdMS_TO_TICKS(5))) {
         if (esp_websocket_client_is_connected(client)) {
-            ESP_LOGI(TAG, "Sending ldr reading: value=%d, timestamp=%lu",
+            ESP_LOGI(TAG, "Sending ldr reading: value=%ld, timestamp=%lu",
                         reading->value,
                         (unsigned long)reading->timestamp);
             esp_websocket_client_send_bin(client, (const char *)reading,

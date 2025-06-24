@@ -113,7 +113,7 @@ void ldr_task(void *pvParameters) {
     while (1) {
         read_ldr(&reading);
         websocket_send_ldr_readings(&reading);
-        vTaskDelay(pdMS_TO_TICKS(30000));
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
@@ -122,7 +122,7 @@ void dht_task(void *pvParameters) {
     while (1) {
         read_dht(&reading);
         websocket_send_dht_readings(&reading);
-        vTaskDelay(pdMS_TO_TICKS(30000));
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
@@ -188,8 +188,8 @@ void app_main(void) {
     }
 
     // Cria tasks
-    xTaskCreatePinnedToCore(i2s_audio_capture_task, "I2S Audio Capture", 4096, NULL, 9, NULL, 0);
-    xTaskCreatePinnedToCore(i2s_send_task, "Send Task", 8192, NULL, 10, NULL, 1);
+    //xTaskCreatePinnedToCore(i2s_audio_capture_task, "I2S Audio Capture", 4096, NULL, 9, NULL, 0);
+    //xTaskCreatePinnedToCore(i2s_send_task, "Send Task", 8192, NULL, 10, NULL, 1);
     xTaskCreatePinnedToCore(ldr_task, "LDR Task", 4096, NULL, 7, NULL, 0);
     xTaskCreatePinnedToCore(dht_task, "DHT Task", 4096, NULL, 8, NULL, 0);
     xTaskCreatePinnedToCore(monitor_task, "Monitor Task", 4096, NULL, 5, NULL, 0);
