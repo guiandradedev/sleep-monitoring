@@ -154,9 +154,9 @@ def get_dashboard_data():
         overall_max_luminosity = float('-inf')
 
         for row in raw_data:
-            timestamp_in_seconds = int(row["interval_timestamp"]) 
+            timestamp_in_seconds = int(row["interval_timestamp"])
             dt_object = datetime.fromtimestamp(timestamp_in_seconds)
-            formatted_dt_string = dt_object.strftime('%Y-%m-%d %H:%M:%S')
+            formatted_dt_string = dt_object.strftime('%Y-%m-%dT%H:%M:%S')
 
             # Apply scaling as per your original code
             current_avg_humidity = float(row["avg_humidity"]) / 10.0

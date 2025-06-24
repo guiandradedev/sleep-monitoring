@@ -97,8 +97,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
                 }
                 const result = response.data.data.map(item => ({
                     ...item,
-                    timestamp: new Date(item.timestamp).getTime(),
-                    datetime: new Date(item.timestamp).toISOString()
+                    timestamp: new Date(item.timestamp * 1000).getTime(),
+                    datetime: new Date(item.datetime).toISOString()
                 }));
                 if (result.length === 0) {
                     console.warn('No data received from the server');
@@ -111,6 +111,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
                     console.log(`Data range: ${new Date(firstTimestamp * 1000).toISOString()} to ${new Date(lastTimestamp * 1000).toISOString()}`);
                 }
                 setData(result);
+                console.log(result)
                 setOverallMetrics(response.data.overall);
             } catch (error) {
                 // console.error('Failed to fetch dashboard data:', error);

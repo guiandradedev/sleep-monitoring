@@ -1,15 +1,5 @@
 import { multipleSelectChartOptions, useDashboard, valueBases } from "../../DashboardContext"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import {
-    Activity,
-    Thermometer,
-    Droplet,
-    Sun,
-    Clock,
-    AlertCircle,
-    CheckCircle
-} from "lucide-react"
 import { TabsContent } from "@/components/ui/tabs"
 import { MultiSelect } from "@/components/ui/multi-select"
 import { useState } from "react"

@@ -132,7 +132,7 @@ export default function Chart({ selectedChartTypes }: ChartProps) {
                             minTickGap={32}
                             tickFormatter={(value: string) => {
                                 // 'value' já é a string formatada do backend
-                                const date = new Date(value);
+                                const date = new Date(value)
                                 // Exibe apenas dia/mês para evitar sobreposição, ou ajuste conforme a densidade
                                 return date.toLocaleDateString("pt-BR", { day: "numeric", month: "short" });
                             }}
@@ -165,7 +165,7 @@ export default function Chart({ selectedChartTypes }: ChartProps) {
                             }}
                         />
                         <ChartTooltip
-                            cursor={false}
+                            cursor={true}
                             content={
                                 <ChartTooltipContent
                                     labelFormatter={(value) => {
@@ -311,9 +311,6 @@ export default function Chart({ selectedChartTypes }: ChartProps) {
                                 />
                             )
                         }
-
-
-
                         <ChartLegend content={<ChartLegendContent />} />
                     </AreaChart>
                 </ChartContainer>
