@@ -31,7 +31,7 @@ interface ChartProps {
     selectedChartTypes: string[];
 }
 export default function Chart({ selectedChartTypes }: ChartProps) {
-    const { dayRange, data, minutesInterval } = useDashboard();
+    const { nightId, data, minutesInterval } = useDashboard();
     const filteredData = useMemo(() => {
         // if (!data || data.length === 0) return [];
 
@@ -57,7 +57,7 @@ export default function Chart({ selectedChartTypes }: ChartProps) {
 
         // return data.filter((item) => item.timestamp >= startTimestamp);
         return data;
-    }, [data, dayRange]);
+    }, [data, nightId]);
 
     if (!filteredData || filteredData.length === 0) {
         return (

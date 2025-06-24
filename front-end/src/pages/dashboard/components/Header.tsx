@@ -16,10 +16,38 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { useEffect, useState } from "react";
+import { axios } from "@/lib/axios";
+
+interface Nights {
+    first_timestamp: number;
+    last_timestamp: number;
+    night_id: number;
+}
 
 export default function Header() {
-    const { getDataMinutes, data, minutesInterval, handleChangeMinutesInterval } = useDashboard()
+    const { getDataMinutes, data, minutesInterval, handleChangeMinutesInterval, nightId, handleChangeNightId } = useDashboard()
     const lastUpdate = data.length > 0 ? new Date(getDataMinutes(data[data.length - 1].timestamp * 1000)).toLocaleString() : "N/A";
+    const [nights, setNights] = useState<Nights[]>([]);
+    const [loading, setLoading] = useState<boolean>(true);
+
+    useEffect(()=>{
+        async function getNights() {
+            setLoading(true);
+            interface NightsResponse {
+                data: Nights[];
+            }
+            const response = await axios.get<NightsResponse>('/nights')
+            if (!response.data || !Array.isArray(response.data.data)) {
+                throw new Error('Invalid data format received from the server');
+            }
+            setNights(response.data.data);
+            handleChangeNightId(String(response.data.data[response.data.data.length - 1].night_id));
+            setLoading(false)
+        }
+        getNights()
+    }, [])
+    useEffect(()=>{ console.log("Nights:", nightId) }, [nightId])
 
     return (
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
@@ -64,6 +92,40 @@ export default function Header() {
                         <SelectItem value="60m" className="rounded-lg">60 minutos</SelectItem>
                     </SelectContent>
                 </Select>
+                
+                {
+                    loading && "Carregando noites..."
+                }
+                { nights.length > 0 && !loading && (
+                    <Select value={nightId} onValueChange={handleChangeNightId}>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <SelectTrigger
+                                    className="hidden w-[250px] rounded-lg sm:ml-auto sm:flex"
+                                    aria-label="Select interval"
+                                >
+                                    <SelectValue placeholder="Intervalo" />
+                                </SelectTrigger>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>Selecione o dia de analise</p>
+                            </TooltipContent>
+                        </Tooltip>
+                        <SelectContent className="rounded-xl">
+                            {
+                                nights.map((night) => (
+                                    <SelectItem
+                                        key={night.night_id}
+                                        value={String(night.night_id)}
+                                        className="rounded-lg"
+                                    >
+                                        Noite {night.night_id}: {new Date(night.first_timestamp * 1000).toLocaleDateString()} - {new Date(night.last_timestamp * 1000).toLocaleDateString()}
+                                    </SelectItem>
+                                ))
+                            }
+                        </SelectContent>
+                    </Select>
+                )}
             </div>
         </div>
     )

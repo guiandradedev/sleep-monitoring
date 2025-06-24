@@ -91,6 +91,7 @@ def websocket(ws):
         except Exception as e:
             print("❌ Erro ao interpretar pacote binário:", e)
             #ws.send("Erro: pacote inválido")
+
 @app.route('/api/dashboard', methods=['GET'])
 def get_dashboard_data():
     conn = None
@@ -99,6 +100,7 @@ def get_dashboard_data():
         # Get and validate the 'interval' parameter
         # Using .get() with a default value is safer than 'or' for request args.
         interval_str = request.args.get('interval', "5m") 
+        nightId = request.args.get('nightId', "") 
         
         if not interval_str.endswith('m'):
             return jsonify({'error': "O parâmetro 'interval' deve terminar com 'm' (ex: '5m', '10m')."}), 400
@@ -115,28 +117,53 @@ def get_dashboard_data():
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
 
-        # Query to get aggregated data by interval
-        query = """
-            SELECT
-                FLOOR(timestamp / %s) * %s AS interval_timestamp,
-                AVG(humidity) AS avg_humidity,
-                AVG(luminosity) AS avg_luminosity,
-                AVG(temperature) AS avg_temperature,
-                MIN(humidity) AS min_humidity,
-                MIN(luminosity) AS min_luminosity,
-                MIN(temperature) AS min_temperature,
-                MAX(humidity) AS max_humidity,
-                MAX(luminosity) AS max_luminosity,
-                MAX(temperature) AS max_temperature
-            FROM
-                data
-            GROUP BY
-                interval_timestamp
-            ORDER BY
-                interval_timestamp ASC;
-        """
-        
-        cursor.execute(query, (seconds_interval, seconds_interval))
+        if nightId:
+            # If nightId is provided, filter data for that night
+            query = """
+                SELECT
+                    FLOOR(timestamp / %s) * %s AS interval_timestamp,
+                    AVG(humidity) AS avg_humidity,
+                    AVG(luminosity) AS avg_luminosity,
+                    AVG(temperature) AS avg_temperature,
+                    MIN(humidity) AS min_humidity,
+                    MIN(luminosity) AS min_luminosity,
+                    MIN(temperature) AS min_temperature,
+                    MAX(humidity) AS max_humidity,
+                    MAX(luminosity) AS max_luminosity,
+                    MAX(temperature) AS max_temperature
+                FROM
+                    data
+                WHERE
+                    night_id = %s
+                GROUP BY
+                    interval_timestamp
+                ORDER BY
+                    interval_timestamp ASC;
+            """
+            cursor.execute(query, (seconds_interval, seconds_interval, nightId))
+        else:
+            # If no nightId is provided, get all data
+            query = """
+                SELECT
+                    FLOOR(timestamp / %s) * %s AS interval_timestamp,
+                    AVG(humidity) AS avg_humidity,
+                    AVG(luminosity) AS avg_luminosity,
+                    AVG(temperature) AS avg_temperature,
+                    MIN(humidity) AS min_humidity,
+                    MIN(luminosity) AS min_luminosity,
+                    MIN(temperature) AS min_temperature,
+                    MAX(humidity) AS max_humidity,
+                    MAX(luminosity) AS max_luminosity,
+                    MAX(temperature) AS max_temperature
+                FROM
+                    data
+                GROUP BY
+                    interval_timestamp
+                ORDER BY
+                    interval_timestamp ASC;
+            """
+            cursor.execute(query, (seconds_interval, seconds_interval))
+
         raw_data = cursor.fetchall()
 
         processed_data = []
@@ -211,10 +238,23 @@ def get_dashboard_data():
         overall_avg_humidity = total_humidity_sum / num_records if num_records > 0 else 0
         overall_avg_luminosity = total_luminosity_sum / num_records if num_records > 0 else 0
 
+        query_last_night = """
+            SELECT
+                night_id
+            FROM
+                data
+            ORDER BY
+                night_id DESC
+            LIMIT 1;
+        """
+        cursor.execute(query_last_night)
+        last_night = cursor.fetchone()
+
         # If no data, return default values
         if not processed_data:
             return jsonify({
                 'data': [], 
+                'last_night': last_night['night_id'] if last_night else None,
                 'averages': {
                     'temperature': 0, 
                     'humidity': 0, 
@@ -229,6 +269,7 @@ def get_dashboard_data():
         
         return jsonify({
             'data': processed_data,
+            'last_night': last_night['night_id'] if last_night else None,
             'overall': {
                 'temperature': {'min': overall_min_temperature, 'max': overall_max_temperature, 'avg': overall_avg_temperature},
                 'humidity': {'min': overall_min_humidity, 'max': overall_max_humidity, 'avg': overall_avg_humidity},
@@ -236,6 +277,63 @@ def get_dashboard_data():
             }
         })
 
+    except mysql.connector.Error as err:
+        print(f"MySQL Database Error: {err}")
+        return jsonify({'error': f"Erro no banco de dados: {str(err)}"}), 500
+    except Exception as e:
+        print(f"Unexpected error processing data: {e}")
+        return jsonify({'error': f"Erro interno do servidor: {str(e)}"}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn and conn.is_connected():
+            conn.close()
+
+
+
+@app.route('/api/nights', methods=['GET'])
+def get_nights():
+    """
+        Retorna uma lista de noites com o primeiro timestamp de cada uma.
+        A lista é ordenada por night_id.
+        Cada noite é representada por um dicionário com 'night_id' e 'first_timestamp'.
+        O timestamp é retornado como um inteiro representando o número de segundos desde a época
+        (1 de janeiro de 1970).
+        Exemplo de resposta:
+        {
+            "data": [
+                {"night_id": 1, "first_timestamp": 1700000000},
+                {"night_id": 2, "first_timestamp": 1700003600},
+                ...
+            ]
+        }
+    """
+    conn = None
+    cursor = None
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+
+        query = """
+            SELECT
+                night_id,
+                MIN(timestamp) AS first_timestamp,
+                MAX(timestamp) AS last_timestamp
+            FROM
+                data
+            GROUP BY
+                night_id
+            ORDER BY
+                night_id;
+        """
+        
+        cursor.execute(query)
+        raw_data = cursor.fetchall()
+
+        return jsonify({
+            'data': raw_data, 
+        })
+    
     except mysql.connector.Error as err:
         print(f"MySQL Database Error: {err}")
         return jsonify({'error': f"Erro no banco de dados: {str(err)}"}), 500

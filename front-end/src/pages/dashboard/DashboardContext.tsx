@@ -8,7 +8,8 @@ interface DashboardContextProps {
     minutesInterval: string;
     handleChangeMinutesInterval: (interval: string) => void;
     overallMetrics: OverallMetrics;
-    dayRange: string;
+    nightId: string;
+    handleChangeNightId: (range: string) => void;
 }
 const DashboardContext = createContext<DashboardContextProps | undefined>(undefined);
 
@@ -77,7 +78,7 @@ export const multipleSelectChartOptions = Object.entries(chartConfig).map((key) 
 export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [data, setData] = useState<ChartData[]>([]);
     const [minutesInterval, setMinutesInterval] = useState("10m");
-    const [dayRange, setDayRange] = useState("7d");
+    const [nightId, setNightId] = useState("");
     const [overallMetrics, setOverallMetrics] = useState<OverallMetrics>({
         temperature: { max: 0, min: 0, avg: 0},
         humidity: { max: 0, min: 0, avg: 0},
@@ -89,15 +90,16 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
             try {
                 interface ResponseData {
                     data: ChartData[];
-                    overall: OverallMetrics
+                    overall: OverallMetrics,
+                    last_night: string;
                 }
-                const response = await axios.get<ResponseData>(`/dashboard?interval=${minutesInterval}`);
+                const response = await axios.get<ResponseData>(`/dashboard?interval=${minutesInterval}&nightId=${nightId}`);
                 if (!response.data || !Array.isArray(response.data.data)) {
                     throw new Error('Invalid data format received from the server');
                 }
                 const result = response.data.data.map(item => ({
                     ...item,
-                    timestamp: new Date(item.timestamp * 1000).getTime(),
+                    timestamp: new Date(item.timestamp).getTime(),
                     datetime: new Date(item.datetime).toISOString()
                 }));
                 if (result.length === 0) {
@@ -119,7 +121,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         };
 
         fetchData();
-    }, [minutesInterval])
+    }, [minutesInterval, nightId])
 
     function getDataMinutes(timestamp: number): number {
         const minutes = parseInt(minutesInterval);
@@ -132,7 +134,9 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     function handleChangeMinutesInterval(interval: string) {
         setMinutesInterval(interval);
     }
-
+    function handleChangeNightId(interval: string) {
+        setNightId(interval);
+    }
     return (
         <DashboardContext.Provider
             value={{
@@ -141,7 +145,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
                 minutesInterval,
                 handleChangeMinutesInterval,
                 overallMetrics,
-                dayRange
+                nightId,
+                handleChangeNightId
             }}>
             {children}
         </DashboardContext.Provider>
