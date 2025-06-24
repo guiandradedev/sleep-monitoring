@@ -55,6 +55,7 @@ typedef struct {
     int64_t timestamp; // Timestamp da leitura
     int16_t temperature_value;    // Valor lido do sensor
     int16_t humidity_value;       // Valor lido do sensor
+    uint8_t dummy;                // Padding to make struct size unique
 } __attribute__((packed)) DhtSensorReading;
 
 void sensor_manager_init(void);

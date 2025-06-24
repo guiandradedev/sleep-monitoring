@@ -39,7 +39,7 @@ def websocket(ws):
             # Tamanho do pacote esperado (int64_t para timestamp + 448 x int16_t para samples)
             expected_mic_packet_size = 8 + (NOISE_SAMPLES_PER_PACKET * 2) # 904 bytes
             expected_ldr_packet_size = 8 + 4 # 12 bytes
-            expected_dht_packet_size = 8 + 2 * 2 # 12 bytes
+            expected_dht_packet_size = 8 + 2 * 2 + 1 # 13 bytes
             
             if len(raw_data) == expected_mic_packet_size:
                 print("pacote mic recebido")
