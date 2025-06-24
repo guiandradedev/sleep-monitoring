@@ -31,7 +31,7 @@ SAMPLE_DURATION_US = 1000000.0 / I2S_SAMPLE_RATE_HZ
 @sock.route('/ws')
 def websocket(ws):
     while True:
-        raw_data = ws.receive()
+        raw_data = ws.receive()         # FIXME: Fica aqui muito depois do envio acabar
         if raw_data is None:
             break
 
