@@ -26,7 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { MultiSelect } from "./components/ui/multi-select"
+import { MultiSelect } from "@/components/ui/multi-select"
 
 export const description = "An interactive area chart with environmental data"
 

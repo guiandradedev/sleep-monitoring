@@ -91,29 +91,31 @@ def websocket(ws):
         except Exception as e:
             print("❌ Erro ao interpretar pacote binário:", e)
             #ws.send("Erro: pacote inválido")
-
-@app.route('/data')
-def get_data():
+@app.route('/api/dashboard', methods=['GET'])
+def get_dashboard_data():
+    conn = None
+    cursor = None
     try:
-        # Obter o parâmetro 'interval' (ex: "5m", "10m")
-        interval_str = request.args.get('interval') or "5m"
+        # Get and validate the 'interval' parameter
+        # Using .get() with a default value is safer than 'or' for request args.
+        interval_str = request.args.get('interval', "5m") 
         
-        # Validar e converter o intervalo para minutos
         if not interval_str.endswith('m'):
-            raise ValueError("O parâmetro 'interval' deve terminar com 'm' (ex: '5m', '10m').")
+            return jsonify({'error': "O parâmetro 'interval' deve terminar com 'm' (ex: '5m', '10m')."}), 400
         
         try:
             interval_minutes = int(interval_str.split("m")[0])
             if interval_minutes <= 0:
-                raise ValueError("O intervalo de minutos deve ser um número positivo.")
-        except ValueError as ve:
-            return jsonify({'error': f"Parâmetro 'interval' inválido: {str(ve)}"}), 400
+                return jsonify({'error': "O intervalo de minutos deve ser um número positivo."}), 400
+        except ValueError:
+            return jsonify({'error': "O parâmetro 'interval' contém um valor numérico inválido."}), 400
 
-        seconds_interval = 60 * interval_minutes # Converter para segundos
+        seconds_interval = 60 * interval_minutes # Convert to seconds
 
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
 
+        # Query to get aggregated data by interval
         query = """
             SELECT
                 FLOOR(timestamp / %s) * %s AS interval_timestamp,
@@ -135,50 +137,118 @@ def get_data():
         """
         
         cursor.execute(query, (seconds_interval, seconds_interval))
+        raw_data = cursor.fetchall()
 
-        raw_dados = cursor.fetchall()
+        processed_data = []
+        
+        # Initialize variables for overall min/max and sums for averages
+        total_temperature_sum = 0
+        total_humidity_sum = 0
+        total_luminosity_sum = 0
+        
+        overall_min_temperature = float('inf')
+        overall_max_temperature = float('-inf')
+        overall_min_humidity = float('inf')
+        overall_max_humidity = float('-inf')
+        overall_min_luminosity = float('inf')
+        overall_max_luminosity = float('-inf')
 
-        processed_dados = []
-        for row in raw_dados:
+        for row in raw_data:
             timestamp_in_seconds = int(row["interval_timestamp"]) 
-            
             dt_object = datetime.fromtimestamp(timestamp_in_seconds)
             formatted_dt_string = dt_object.strftime('%Y-%m-%d %H:%M:%S')
+
+            # Apply scaling as per your original code
+            current_avg_humidity = float(row["avg_humidity"]) / 10.0
+            current_min_humidity = float(row["min_humidity"]) / 10.0
+            current_max_humidity = float(row["max_humidity"]) / 10.0
+
+            current_avg_luminosity = float(row["avg_luminosity"]) / 1000.0
+            current_min_luminosity = float(row["min_luminosity"]) / 1000.0
+            current_max_luminosity = float(row["max_luminosity"]) / 1000.0
+            
+            current_avg_temperature = float(row["avg_temperature"]) / 10.0
+            current_min_temperature = float(row["min_temperature"]) / 10.0
+            current_max_temperature = float(row["max_temperature"]) / 10.0
 
             processed_row = {
                 "timestamp": timestamp_in_seconds,
                 "datetime": formatted_dt_string,
                 "humidity": {
-                    "avg": float(row["avg_humidity"]) / 10.0,
-                    "min": float(row["min_humidity"]) / 10.0,
-                    "max": float(row["max_humidity"]) / 10.0
+                    "avg": current_avg_humidity,
+                    "min": current_min_humidity,
+                    "max": current_max_humidity
                 },
                 "luminosity": {
-                    "avg": float(row["avg_luminosity"]) / 1000.0,
-                    "min": float(row["min_luminosity"]) / 1000.0,
-                    "max": float(row["max_luminosity"]) / 1000.0
+                    "avg": current_avg_luminosity,
+                    "min": current_min_luminosity,
+                    "max": current_max_luminosity
                 },
                 "temperature": {
-                    "avg": float(row["avg_temperature"]) / 10.0,
-                    "min": float(row["min_temperature"]) / 10.0,
-                    "max": float(row["max_temperature"]) / 10.0
+                    "avg": current_avg_temperature,
+                    "min": current_min_temperature,
+                    "max": current_max_temperature
                 },
             }
-            processed_dados.append(processed_row)
+            processed_data.append(processed_row)
+            
+            # Accumulate for overall averages
+            total_temperature_sum += current_avg_temperature
+            total_humidity_sum += current_avg_humidity
+            total_luminosity_sum += current_avg_luminosity
 
-        return jsonify(processed_dados)
+            # Update overall min/max values
+            overall_min_temperature = min(overall_min_temperature, current_min_temperature)
+            overall_max_temperature = max(overall_max_temperature, current_max_temperature)
+            overall_min_humidity = min(overall_min_humidity, current_min_humidity)
+            overall_max_humidity = max(overall_max_humidity, current_max_humidity)
+            overall_min_luminosity = min(overall_min_luminosity, current_min_luminosity)
+            overall_max_luminosity = max(overall_max_luminosity, current_max_luminosity)
+
+        # Calculate overall averages, handle case where no data is returned
+        num_records = len(processed_data)
+        overall_avg_temperature = total_temperature_sum / num_records if num_records > 0 else 0
+        overall_avg_humidity = total_humidity_sum / num_records if num_records > 0 else 0
+        overall_avg_luminosity = total_luminosity_sum / num_records if num_records > 0 else 0
+
+        # If no data, return default values
+        if not processed_data:
+            return jsonify({
+                'data': [], 
+                'averages': {
+                    'temperature': 0, 
+                    'humidity': 0, 
+                    'luminosity': 0
+                },
+                'overall_min_max': {
+                    'temperature': {'min': 0, 'max': 0},
+                    'humidity': {'min': 0, 'max': 0},
+                    'luminosity': {'min': 0, 'max': 0}
+                }
+            })
+        
+        return jsonify({
+            'data': processed_data,
+            'overall': {
+                'temperature': {'min': overall_min_temperature, 'max': overall_max_temperature, 'avg': overall_avg_temperature},
+                'humidity': {'min': overall_min_humidity, 'max': overall_max_humidity, 'avg': overall_avg_humidity},
+                'luminosity': {'min': overall_min_luminosity, 'max': overall_max_luminosity, 'avg': overall_avg_luminosity}
+            }
+        })
 
     except mysql.connector.Error as err:
-        print(f"Erro no banco de dados MySQL: {err}")
+        print(f"MySQL Database Error: {err}")
         return jsonify({'error': f"Erro no banco de dados: {str(err)}"}), 500
     except Exception as e:
-        print(f"Erro inesperado ao processar os dados: {e}")
+        print(f"Unexpected error processing data: {e}")
         return jsonify({'error': f"Erro interno do servidor: {str(e)}"}), 500
     finally:
-        if 'cursor' in locals() and cursor:
+        if cursor:
             cursor.close()
-        if 'conn' in locals() and conn and conn.is_connected():
+        if conn and conn.is_connected():
             conn.close()
+
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001, debug=True)

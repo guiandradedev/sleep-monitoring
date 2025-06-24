@@ -1,12 +1,10 @@
-import PreciseSensorChart from './Sensor'
+import Dashboard from './pages/dashboard'
 
 function App() {
   return (
-    <>
-      <div style={{"width": "100%"}}>
-        <PreciseSensorChart />
-      </div>
-    </>
+    <div className='w-dvw h-dvh'>
+      <Dashboard />
+    </div>
   )
 }
 
