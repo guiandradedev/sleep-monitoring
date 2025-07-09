@@ -113,7 +113,7 @@ void ldr_task(void *pvParameters) {
     while (1) {
         read_ldr(&reading);
         websocket_send_ldr_readings(&reading);
-        vTaskDelay(pdMS_TO_TICKS(30000));
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
@@ -122,7 +122,7 @@ void dht_task(void *pvParameters) {
     while (1) {
         read_dht(&reading);
         websocket_send_dht_readings(&reading);
-        vTaskDelay(pdMS_TO_TICKS(30000));
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 

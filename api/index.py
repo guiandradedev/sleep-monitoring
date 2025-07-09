@@ -59,7 +59,7 @@ def websocket(ws):
                 rows = [(int(timestamp), int(sample), "luminosity")]
             elif len(raw_data) == expected_dht_packet_size:
                 print("pacote dht recebido")
-                timestamp, temp, hum = struct.unpack('<q2h', raw_data)
+                timestamp, temp, hum, _ = struct.unpack('<q2hB', raw_data)
                 rows = [
                     (int(timestamp), int(temp), "temperature"),
                     (int(timestamp), int(hum), "humidity")
