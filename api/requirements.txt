@@ -2,6 +2,7 @@ flask
 mysql-connector-python
 python-dotenv
 flask-sock
-
 matplotlib
 requests
+Flask-CORS
+pandas
