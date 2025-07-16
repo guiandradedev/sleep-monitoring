@@ -1,5 +1,5 @@
-#include <time.h>
 #include <math.h>
+#include <time.h>
 
 #include "esp_log.h"
 #include "esp_sntp.h"
@@ -11,13 +11,12 @@
 #include "sensor_manager.h"
 #include "websocket_client.h"
 #include "wifi_manager.h"
-#include "config_server.h"
 
 #define NOISE_QUEUE_LENGTH 50
 
 static const char *TAG = "main";
 
-void init_time_sync() {
+void time_sync_init() {
     esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
     esp_sntp_setservername(0, "pool.ntp.org");
     esp_sntp_init();
@@ -38,20 +37,18 @@ void init_time_sync() {
 static QueueHandle_t noise_queue;
 
 // --- Tarefa que captura áudio via I2S ---
-// Esta tarefa lê amostras de áudio do I2S, as empacota em uma estrutura RawSensorPacket
-// e as envia para uma fila para processamento posterior.
+// Lê amostras de áudio do I2S, as empacota em uma estrutura RawMicPacket e as envia para uma fila para processamento posterior.
 void i2s_audio_capture_task(void *pvParameters) {
-    // Buffer das amostras de áudio de um pacote RawSensorPacket (recomendado que seja um múltiplo do I2S_DMA_BUFFER_LEN)
+    // Buffer das amostras de áudio de um pacote RawMicPacket (recomendado que seja um múltiplo do I2S_DMA_BUFFER_LEN)
     int32_t *audio_buffer = (int32_t *)malloc(NOISE_SAMPLES_PER_PACKET * sizeof(int32_t));
     if (audio_buffer == NULL) {
         ESP_LOGE(TAG, "Falha ao alocar buffer de áudio na task de captura.");
-        vTaskDelete(NULL); // Deleta a própria task em caso de falha
+        vTaskDelete(NULL);  // Deleta a própria task em caso de falha
     }
     memset(audio_buffer, 0, NOISE_SAMPLES_PER_PACKET * sizeof(int32_t));
 
-    RawSensorPacket raw_packet;
+    RawMicPacket raw_packet;
     size_t samples_read;
-    //const TickType_t i2s_read_timeout = pdMS_TO_TICKS(100); // Timeout para leitura I2S
 
     while (1) {
         // Lê as amostras diretamente do I2S.
@@ -66,7 +63,7 @@ void i2s_audio_capture_task(void *pvParameters) {
             // Adiciona o timestamp em microsegundos
             struct timeval tv;
             gettimeofday(&tv, NULL);
-            raw_packet.timestamp = (tv.tv_sec * 1000000LL) + tv.tv_usec; // 1000000LL para garantir que a multiplicação seja 64-bit
+            raw_packet.timestamp = (tv.tv_sec * 1000000LL) + tv.tv_usec;  // 1000000LL para garantir que a multiplicação seja 64-bit
 
             // Enfileira o pacote para a task de envio
             if (xQueueSend(noise_queue, &raw_packet, pdMS_TO_TICKS(100)) != pdTRUE) {
@@ -81,23 +78,21 @@ void i2s_audio_capture_task(void *pvParameters) {
 
         // Cuidado!!! Não precisa de delay apenas porque a impressão do estado do sistema bloqueia a task.
     }
-    free(audio_buffer); // Atingível apenas se a task for deletada
+    free(audio_buffer);  // Atingível apenas se a task for deletada
 }
 
-// --- Task que envia pacotes da fila via WebSocket ---
-// Esta tarefa roda constantemente, recebendo pacotes da fila noise_queue,
-// convertendo as amostras de 32 bits para 16 bits e enviando-os via WebSocket.
+// --- Tarefa que envia pacotes da fila via WebSocket ---
+// Recebendo pacotes da fila noise_queue converte as amostras de 32 bits para 16 bits e as envia via WebSocket.
 void i2s_send_task(void *pvParameters) {
-    RawSensorPacket raw_packet;
-    SensorPacket packet;
-    
+    RawMicPacket raw_packet;
+    MicPacket packet;
+
     while (1) {
         if (xQueueReceive(noise_queue, &raw_packet, portMAX_DELAY) == pdTRUE) {
-
             for (int i = 0; i < NOISE_SAMPLES_PER_PACKET; i++) {
-                packet.samples[i] = (int16_t) (raw_packet.samples[i] >> 8); // Desloca os 8 bits menos significativos do pacote de 24 bits
+                packet.samples[i] = (int16_t)(raw_packet.samples[i] >> 8);  // Desloca os 8 bits menos significativos do pacote de 24 bits
             }
-            packet.timestamp = raw_packet.timestamp; // Mantém o timestamp original
+            packet.timestamp = raw_packet.timestamp;  // Mantém o timestamp original
 
             websocket_send_mic_readings(&packet);
             ESP_LOGI(TAG, "Tamanho da fila: %d", uxQueueMessagesWaiting(noise_queue));
@@ -105,33 +100,21 @@ void i2s_send_task(void *pvParameters) {
     }
 }
 
-
-// --- Tarefas de leitura de sensores LDR e DHT ---
-// Essas tarefas leem os sensores LDR e DHT periodicamente e enviam os dados via WebSocket.
-void ldr_task(void *pvParameters) {
-    LdrSensorReading reading;
+// --- Tarefas de leitura de sensores de ambiente (LDR e DHT) ---
+// Essas tarefas leem os sensores de ambiente periodicamente e enviam os dados via WebSocket.
+void ambient_task(void *pvParameters) {
+    AmbientSensorsReadings reading;
     while (1) {
-        read_ldr(&reading);
-        websocket_send_ldr_readings(&reading);
+        read_ambient(&reading);
+        websocket_send_ambient_readings(&reading);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
-
-void dht_task(void *pvParameters) {
-    DhtSensorReading reading;
-    while (1) {
-        read_dht(&reading);
-        websocket_send_dht_readings(&reading);
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
-}
-
 
 // --- Função para imprimir o uso de CPU por task ---
 // Esta função obtém o estado do sistema, calcula o tempo de execução de cada task
 // e imprime o uso de CPU em porcentagem, para fins de depuração e monitoramento.
-void print_task_cpu_usage(void)
-{
+void print_task_cpu_usage(void) {
     UBaseType_t num_tasks = uxTaskGetNumberOfTasks();
     TaskStatus_t *task_array = pvPortMalloc(num_tasks * sizeof(TaskStatus_t));
     uint32_t total_runtime;
@@ -165,23 +148,21 @@ void print_task_cpu_usage(void)
 void monitor_task(void *pvParameters) {
     while (1) {
         print_task_cpu_usage();
-        vTaskDelay(pdMS_TO_TICKS(5000)); // a cada 5 segundos
+        vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }
-
 
 // --- Função principal do aplicativo ---
 void app_main(void) {
     ESP_ERROR_CHECK(nvs_flash_init());
-    wifi_init_sta();
-    start_config_server();
-    websocket_app_start();
-    init_time_sync();
 
+    wifi_init();
+    websocket_init();
+    time_sync_init();
     sensor_manager_init();
 
-    // Cria fila
-    noise_queue = xQueueCreate(NOISE_QUEUE_LENGTH, sizeof(RawSensorPacket));
+    // Cria fila para pacotes de áudio
+    noise_queue = xQueueCreate(NOISE_QUEUE_LENGTH, sizeof(RawMicPacket));
     if (noise_queue == NULL) {
         ESP_LOGE("MAIN", "Falha ao criar a fila");
         return;
@@ -190,7 +171,6 @@ void app_main(void) {
     // Cria tasks
     xTaskCreatePinnedToCore(i2s_audio_capture_task, "I2S Audio Capture", 4096, NULL, 9, NULL, 0);
     xTaskCreatePinnedToCore(i2s_send_task, "Send Task", 8192, NULL, 10, NULL, 1);
-    xTaskCreatePinnedToCore(ldr_task, "LDR Task", 4096, NULL, 7, NULL, 0);
-    xTaskCreatePinnedToCore(dht_task, "DHT Task", 4096, NULL, 8, NULL, 0);
-    xTaskCreatePinnedToCore(monitor_task, "Monitor Task", 4096, NULL, 5, NULL, 0);
+    xTaskCreatePinnedToCore(ambient_task, "LDR Task", 4096, NULL, 7, NULL, 0);
+    xTaskCreatePinnedToCore(monitor_task, "Monitor Task", 4096, NULL, 5, NULL, 0);  // TODO: Testar sem
 }

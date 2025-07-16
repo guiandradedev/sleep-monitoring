@@ -14,14 +14,15 @@
 
 static EventGroupHandle_t s_wifi_event_group;
 #define WIFI_CONNECTED_BIT BIT0
-#define TAG "wifi"
+#define TAG "wifi_manager"
 
-static void wifi_event_handler(void* arg, esp_event_base_t event_base,
-                               int32_t event_id, void* event_data) {
+// --- Função de callback para eventos Wi-Fi ---
+// É chamada quando ocorrem eventos de conexão, desconexão e obtenção de IP.
+// TODO: Talvez melhorar depois
+static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
         esp_wifi_connect();
-    } else if (event_base == WIFI_EVENT &&
-               event_id == WIFI_EVENT_STA_DISCONNECTED) {
+    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         esp_wifi_connect();
         ESP_LOGI(TAG, "Retrying to connect...");
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
@@ -31,7 +32,9 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
     }
 }
 
-void wifi_init_sta(void) {
+// --- Inicializa o Wi-Fi ---
+// Configura o Wi-Fi no modo STA, conecta à rede e aguarda a obtenção de IP.
+void wifi_init(void) {
     s_wifi_event_group = xEventGroupCreate();
 
     esp_netif_init();
@@ -41,10 +44,8 @@ void wifi_init_sta(void) {
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     esp_wifi_init(&cfg);
 
-    esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
-                                        &wifi_event_handler, NULL, NULL);
-    esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
-                                        &wifi_event_handler, NULL, NULL);
+    esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL);
+    esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, NULL);
 
     wifi_config_t wifi_config = {
         .sta =
@@ -60,6 +61,5 @@ void wifi_init_sta(void) {
 
     ESP_LOGI("wifi", "Connecting to Wi-Fi...");
 
-    xEventGroupWaitBits(s_wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE,
-                        pdFALSE, portMAX_DELAY);
+    xEventGroupWaitBits(s_wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
 }

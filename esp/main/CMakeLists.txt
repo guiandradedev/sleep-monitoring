@@ -4,7 +4,7 @@ idf_component_register(
         "wifi_manager.c"
         "websocket_client.c"
         "sensor_manager.c"
-        "config_server.c"
+       
         "Kconfig"
     INCLUDE_DIRS "."
     REQUIRES 

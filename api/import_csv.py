@@ -37,8 +37,8 @@ def insert_data_from_csv():
 
             # Prepare a query de inserção
             # As colunas devem corresponder às do seu CSV e da sua tabela
-            columns = "timestamp, humidity, luminosity, temperature"
-            insert_query = f"INSERT INTO {table_name} ({columns}) VALUES (%s, %s, %s, %s)"
+            columns = "timestamp, humidity, luminosity, temperature, night_id"
+            insert_query = f"INSERT INTO {table_name} ({columns}) VALUES (%s, %s, %s, %s, %s)"
 
             # Iterar pelo DataFrame e inserir cada linha
             print(f"\nIniciando inserção de {len(df)} linhas na tabela '{table_name}'...")
@@ -53,7 +53,8 @@ def insert_data_from_csv():
                     row['timestamp'],
                     row['humidity'],
                     row['luminosity'],
-                    row['temperature']
+                    row['temperature'],
+                    1
                 )
                 cursor.execute(insert_query, values)
 

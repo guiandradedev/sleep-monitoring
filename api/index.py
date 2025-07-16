@@ -8,6 +8,7 @@ from datetime import datetime
 import struct
 from flask_cors import CORS
 import requests
+import wave
 
 # Carrega as variáveis de ambiente do arquivo .env
 load_dotenv()
@@ -30,67 +31,98 @@ NOISE_SAMPLES_PER_PACKET = 384
 I2S_SAMPLE_RATE_HZ = 18000
 SAMPLE_DURATION_US = 1000000.0 / I2S_SAMPLE_RATE_HZ
 
+AUDIO_DIR = "audio"
+os.makedirs(AUDIO_DIR, exist_ok=True)
+
+wav_file = None
+last_audio_timestamp = None
+
+def get_last_night_id():
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        cursor.execute("SELECT MAX(night_id) FROM data")
+        result = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        return result[0] if result[0] is not None else 0
+    except Exception as e:
+        print("Erro ao buscar night_id:", e)
+        return 0
+
+night_id = get_last_night_id()
 
 @sock.route('/ws')
 def websocket(ws):
+    global wav_file, last_audio_timestamp, night_id
     while True:
-        raw_data = ws.receive()         # FIXME: Fica aqui muito depois do envio acabar
+        raw_data = ws.receive()
         if raw_data is None:
             break
 
         try:
-            # Tamanho do pacote esperado (int64_t para timestamp + 448 x int16_t para samples)
             expected_mic_packet_size = 8 + (NOISE_SAMPLES_PER_PACKET * 2) # 904 bytes
-            expected_ldr_packet_size = 8 + 4 # 12 bytes
-            expected_dht_packet_size = 8 + 2 * 2 + 1 # 13 bytes
-            
+            expected_ambient_packet_size = 8 + 4 + 2 + 2 # 16 bytes
+
             if len(raw_data) == expected_mic_packet_size:
                 print("pacote mic recebido")
                 timestamp, *samples = struct.unpack(f'<q{NOISE_SAMPLES_PER_PACKET}h', raw_data)
+                audio_bytes = struct.pack(f'<{NOISE_SAMPLES_PER_PACKET}h', *samples)
 
+                # If this is the first packet or >5min from last, start new file
+                if last_audio_timestamp is None or (timestamp - last_audio_timestamp) > 10_000_000:
+                    night_id += 1
+                    
+                    # Close previous file if open
+                    if wav_file is not None:
+                        wav_file.close()
+                    # Create new file with timestamp in name
+                    filename = f"audio_{timestamp}_{night_id}.wav"
+                    wav_file = wave.open(os.path.join(AUDIO_DIR, filename), 'wb')
+                    wav_file.setnchannels(1)
+                    wav_file.setsampwidth(2)
+                    wav_file.setframerate(I2S_SAMPLE_RATE_HZ)
+                    
+                # Write to current file
+                wav_file.writeframes(audio_bytes)
+                last_audio_timestamp = timestamp
+
+            elif len(raw_data) == expected_ambient_packet_size:
+                print("pacote ambiente recebido")
+                timestamp, lum, temp, hum = struct.unpack('<qihh', raw_data)
                 rows = [
-                    (
-                        int(timestamp - (NOISE_SAMPLES_PER_PACKET - 1 - i) * SAMPLE_DURATION_US), 
-                        int(sample), 
-                        "microphone"
-                    )
-                    for i, sample in enumerate(samples)
+                    (int(timestamp), int(lum), int(temp), int(hum), night_id if night_id != 0 else 1)  # Para evitar que o night_id seja 0 quando é o primeiro pacote recebido
                 ]
-            elif len(raw_data) == expected_ldr_packet_size:
-                print("pacote ldr recebido")
-                timestamp, sample = struct.unpack('<qi', raw_data)
-                rows = [(int(timestamp), int(sample), "luminosity")]
-            elif len(raw_data) == expected_dht_packet_size:
-                print("pacote dht recebido")
-                timestamp, temp, hum, _ = struct.unpack('<q2hB', raw_data)
-                rows = [
-                    (int(timestamp), int(temp), "temperature"),
-                    (int(timestamp), int(hum), "humidity")
-                ]
+                # Inserir no banco
+                try:
+                    conn = mysql.connector.connect(**db_config)
+                    cursor = conn.cursor()
+
+                    # Insere todos de uma vez
+                    cursor.executemany("INSERT INTO data (timestamp, luminosity, humidity, temperature, night_id) VALUES (%s, %s, %s, %s, %s)", rows)  # TODO: Inserir um só
+
+                    conn.commit()
+                    #ws.send("Cadastrado")
+                except mysql.connector.Error as err:
+                    print("❌ Erro ao inserir dados:", err)
+                    #ws.send(f"Erro: {str(err)}")
+                finally:
+                    cursor.close()
+                    conn.close()
+           
             else:
                 print(f"⚠️ Pacote inesperado (tamanho {len(raw_data)} bytes)")
                 continue
-            
-            # Inserir no banco
-            try:
-                conn = mysql.connector.connect(**db_config)
-                cursor = conn.cursor()
-
-                # Insere todos de uma vez
-                cursor.executemany("INSERT INTO data (timestamp, sample, type) VALUES (%s, %s, %s)", rows)
-
-                conn.commit()
-                #ws.send("Cadastrado")
-            except mysql.connector.Error as err:
-                print("❌ Erro ao inserir dados:", err)
-                #ws.send(f"Erro: {str(err)}")
-            finally:
-                cursor.close()
-                conn.close()
-
+        
         except Exception as e:
             print("❌ Erro ao interpretar pacote binário:", e)
             #ws.send("Erro: pacote inválido")
+
+    # Close WAV file when done
+    if wav_file is not None:
+        wav_file.close()
+        wav_file = None
+        last_audio_timestamp = None
 
 @app.route('/api/dashboard', methods=['GET'])
 def get_dashboard_data():
